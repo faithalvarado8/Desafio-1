@@ -1,0 +1,118 @@
+#include <LiquidCrystal.h>
+
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+
+//INICIALIZACION DE VARIABLES
+
+//Variables del temporizador
+unsigned long tiempoInicio;
+unsigned long tiempoActual;
+int temporizador;
+
+//Variables de Arduino
+int analogPin = A0;
+int val = 0;
+int digitalPin = 7;
+int estadoPulsador = 0;
+int digitalPin2 = 8;
+int estadoPulsador2 = 0;
+int valorDelay = 10;
+bool adquisicionActiva = false;
+
+//Variables del arreglo dinamico
+unsigned int tamanoArreglo = 300; // Tamaño del arreglo
+int* datosSenal = new int[tamanoArreglo]; //Arreglo dinamico
+unsigned int inicio = 0; //Indice del primer elemento del arreglo
+unsigned int fin = 0; //Indice del ultimo elemento del arreglo
+unsigned int cantidadDatos = 0; //Numero de elementos del arreglo
+
+// Variables para el promedio
+long sumaTotal = 0; // Suma acumulada de todos los valores
+unsigned long cantidadTotalValores = 0; // Cantidad total de valores procesados
+float promedio;
+
+//CONFIGURACION DE LA TARJETA DE ARDUINO
+void setup(){
+  
+  Serial.begin(9600);
+  lcd.begin(16, 2);
+  pinMode(digitalPin, INPUT);
+  pinMode(digitalPin2, INPUT);
+}  
+
+//ARREGLO DINAMICO DE DATOS
+void agregarDatos(int dato){
+  
+  sumaTotal += dato;
+  
+  if(cantidadDatos == tamanoArreglo){ //Arreglo ya esta lleno, sobreescribir el dato mas antiguo
+    sumaTotal -= datosSenal[inicio];
+    datosSenal[inicio] = dato;
+    inicio = (inicio + 1) % tamanoArreglo; //Reemplazo el condicional(llegó al final?)
+  }
+  else{
+    datosSenal[fin] = dato;
+    fin = (fin + 1) % tamanoArreglo;
+    cantidadDatos++;
+    cantidadTotalValores++;
+  }
+}
+
+//CALCULAR EL PROMEDIO TOTAL DE TODOS LOS VALORES
+float calcularPromedioTotal() {
+  if (cantidadTotalValores == 0) {
+    return 0; // Evitar división por cero
+  }
+  return (float)sumaTotal/cantidadTotalValores; // Retorna el promedio de todos los valores
+}
+
+//CALCULO DE LA ONDA
+
+//LAZOS DE CALCULO DE LA TARJETA DE ARDUINO
+void loop(){
+  val = analogRead(analogPin);
+  Serial.println(val);
+  
+  estadoPulsador = digitalRead(digitalPin);
+  estadoPulsador2 = digitalRead(digitalPin2);
+  
+  if(estadoPulsador == HIGH){
+    adquisicionActiva = true;
+    tiempoInicio = millis();
+    // Reiniciar los contadores para el nuevo promedio
+    lcd.setCursor(0, 0);
+	  lcd.print("Tomando datos...");
+    sumaTotal=0;
+    cantidadTotalValores=0;
+    cantidadDatos = 0;
+    inicio = 0;
+    fin = 0;
+    
+  }
+
+  if(estadoPulsador2 == HIGH){
+    adquisicionActiva = false;
+    promedio = calcularPromedioTotal();
+    
+    lcd.setCursor(0, 0);
+	  lcd.print("Valor:           ");
+    lcd.setCursor(7, 0);
+	  lcd.print(val);
+    
+    lcd.setCursor(0, 1);
+    lcd.print("PromT:            ");
+    lcd.setCursor(7, 1);
+    lcd.print(promedio);  
+    
+  }
+  
+  if(adquisicionActiva){
+   
+    agregarDatos(val);
+    
+    tiempoActual = millis();
+	  temporizador = (tiempoActual - tiempoInicio) / 1000;
+    
+  }
+  delay(valorDelay);
+}
