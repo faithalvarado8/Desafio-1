@@ -81,7 +81,9 @@ void loop(){
     tiempoInicio = millis();
     // Reiniciar los contadores para el nuevo promedio
     lcd.setCursor(0, 0);
-	  lcd.print("Tomando datos...");
+    lcd.print("Tomando datos...");
+    lcd.setCursor(0, 1);
+    lcd.print("                ");
     sumaTotal=0;
     cantidadTotalValores=0;
     cantidadDatos = 0;
@@ -95,9 +97,9 @@ void loop(){
     promedio = calcularPromedioTotal();
     
     lcd.setCursor(0, 0);
-	  lcd.print("Valor:           ");
+    lcd.print("Valor:           ");
     lcd.setCursor(7, 0);
-	  lcd.print(val);
+    lcd.print(val);
     
     lcd.setCursor(0, 1);
     lcd.print("PromT:            ");
@@ -111,7 +113,7 @@ void loop(){
     agregarDatos(val);
     
     tiempoActual = millis();
-	  temporizador = (tiempoActual - tiempoInicio) / 1000;
+    temporizador = (tiempoActual - tiempoInicio) / 1000;
     
   }
   delay(valorDelay);
