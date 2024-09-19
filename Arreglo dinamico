@@ -1,0 +1,90 @@
+#include <LiquidCrystal.h>
+
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+
+unsigned long tiempoInicio;
+unsigned long tiempoActual;
+int temporizador;
+
+int analogPin = A0;
+int val = 0;
+int digitalPin = 7;
+int estadoPulsador = 0;
+int digitalPin2 = 8;
+int estadoPulsador2 = 0;
+bool adquisicionActiva = false;
+
+int valorDelay = 10;
+
+int valSize = 300;
+int* valores= new int[valSize];
+int indice = 0;
+bool valoresLleno = false;
+
+void setup(){
+  
+  Serial.begin(9600);
+  lcd.begin(16, 2);
+  lcd.print("Valor: ");
+  pinMode(digitalPin, INPUT);
+  pinMode(digitalPin2, INPUT);
+}  
+
+
+void desplazarYAgregar(int nuevoValor) {
+    
+  	if (!valoresLleno) {
+        valores[indice] = nuevoValor;
+        indice++;
+    
+    	if (indice >= valSize) {
+        	valoresLleno = true;
+       		indice = 0;
+    	}
+   	} else {
+        for (int i = 0; i < valSize - 1; i++) {
+            valores[i] = valores[i + 1];
+        }
+        valores[valSize - 1] = nuevoValor;
+    }
+}
+
+void loop(){
+  val = analogRead(analogPin);
+  Serial.println(val);
+  
+  estadoPulsador = digitalRead(digitalPin);
+  estadoPulsador2 = digitalRead(digitalPin2);
+  
+  if(estadoPulsador == HIGH){
+    adquisicionActiva = true;
+    tiempoInicio = millis();
+  }
+
+  if(estadoPulsador2 == HIGH){
+    adquisicionActiva = false;
+    
+  }
+  
+  if(adquisicionActiva){
+	 
+    desplazarYAgregar(val);
+    
+    lcd.setCursor(0, 0);
+	lcd.print("Valor:           ");
+    lcd.setCursor(7, 0);
+	lcd.print(val);
+    
+	//lcd.setCursor(0, 1);
+	//lcd.print("Pendiente:           ");
+    //lcd.setCursor(11, 1);
+	//lcd.print("WIP..."); 
+    
+    tiempoActual = millis();
+	temporizador = (tiempoActual - tiempoInicio) / 1000;
+    
+    Serial.print("Tiempo: ");
+    Serial.println(temporizador);
+  }
+  delay(valorDelay);
+}

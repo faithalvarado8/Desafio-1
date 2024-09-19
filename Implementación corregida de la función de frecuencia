@@ -1,0 +1,218 @@
+#include <LiquidCrystal.h>
+
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+
+//INICIALIZACION DE VARIABLES
+
+//Variables del temporizador
+//unsigned long tiempoInicio;
+//unsigned long tiempoActual;
+//int temporizador;
+
+//Variables de Arduino
+int analogPin = A0;
+int val = 0;
+int digitalPin = 7;
+int estadoPulsador = 0;
+int digitalPin2 = 8;
+int estadoPulsador2 = 0;
+int valorDelay = 20; //Incremento del tiempo en milisegundos
+bool adquisicionActiva = false;
+
+//Variables del arreglo dinamico
+unsigned int tamanoArreglo = 300; // Tamaño del arreglo
+int* datosSenal = new int[tamanoArreglo]; //Arreglo dinamico
+unsigned int inicio = 0; //Indice del primer elemento del arreglo
+unsigned int fin = 0; //Indice del ultimo elemento del arreglo
+unsigned int cantidadDatos = 0; //Numero de elementos del arreglo
+
+// Variables para el promedio
+long sumaTotal = 0; // Suma acumulada de todos los valores
+float offset; //Offset de la señal
+
+// Variables para los extremos
+const float factorConversion = 5.0/1023.0; //Tension analogica a voltios
+int max, min; //Maximo y minimo de la señal
+
+// Variables para forma de onda
+char formaOnda; //Identificador tipo de onda
+int percentilSup; //Percentil 95 tensiones discretas
+float frecuencia; //Frecuencia de la onda
+
+//CONFIGURACION DE LA TARJETA DE ARDUINO
+void setup(){
+  
+  Serial.begin(9600);
+  lcd.begin(16, 2);
+  pinMode(digitalPin, INPUT);
+  pinMode(digitalPin2, INPUT);
+}  
+
+//ARREGLO DINAMICO DE DATOS
+void agregarDatos(int dato){
+  
+  sumaTotal += dato;
+  
+  if(cantidadDatos == tamanoArreglo){ //Arreglo ya esta lleno, sobreescribir el dato mas antiguo
+    sumaTotal -= datosSenal[inicio];
+    datosSenal[inicio] = dato;
+    inicio = (inicio + 1) % tamanoArreglo; //Reemplazo el condicional(llegó al final?)
+  }
+  else{
+    datosSenal[fin] = dato;
+    fin = (fin + 1) % tamanoArreglo;
+    cantidadDatos++;
+  }
+}
+
+//CALCULO DE LA ONDA
+
+//Calcula el promedio de los puntos discretos para estimar el offset
+float calcularPromedioTotal() {
+  if (cantidadDatos == 0) {
+    return 0; // Evitar división por cero
+  }
+  return (float)sumaTotal/cantidadDatos; 
+}
+
+//Calcula los valores extremos; maximo y minimo
+void calcularExtremos(int* max, int* min){
+  *max = datosSenal[0];
+  *min = datosSenal[0];
+  unsigned int i = 0;
+  
+  while(i < cantidadDatos){
+  	if (datosSenal[i] > *max){
+      *max = datosSenal[i];
+    }
+    if(datosSenal[i] < *min){
+      *min = datosSenal[i];
+    }
+    
+    i++;
+  }
+}
+
+//Calcula percentil de la señal discreta
+float percentilSuperior(int *max, int *min) {
+    unsigned int i = 0;
+    unsigned int percentil = 0;
+    float umbral = *max - (*max - *min) * 0.05;  // Calcula el umbral del 5% superior
+
+    for (i = 0; i < cantidadDatos; i++) {
+        if (datosSenal[i] >= umbral) {
+            percentil++;
+        }
+    }
+    return (float)percentil / cantidadDatos * 100;
+}
+
+//Define la forma en funcion del percentil
+void defineForma(int percentilSup){
+  
+  if(percentilSup > 12 && percentilSup < 25){
+      formaOnda = 'S';
+    }
+    else if(percentilSup >= 8 && percentilSup <= 12){
+      formaOnda = 'T';
+    }
+    else if(percentilSup >= 45 && percentilSup <= 55){
+      formaOnda = 'C';
+    }
+    else{
+      formaOnda = 'D';
+    }
+  lcd.setCursor(14, 0);
+  lcd.print(formaOnda);
+}
+
+//Calcula la frecuencia de la onda
+float calcularFrecuencia() {
+    unsigned int ceros = 0;
+    
+    for (int i = 1; i < cantidadDatos; i++) {
+        if ((datosSenal[i-1] - offset) * (datosSenal[i] - offset) < 0) {
+            ceros++;
+        }
+    }
+
+    float tiempoCaptura = cantidadDatos * valorDelay;
+    return (float) ceros * 1000 / (2 * tiempoCaptura);
+}
+  
+
+//LAZOS DE CALCULO DE LA TARJETA DE ARDUINO
+void loop(){
+  val = analogRead(analogPin);
+  Serial.println(val);
+  
+  estadoPulsador = digitalRead(digitalPin);
+  estadoPulsador2 = digitalRead(digitalPin2);
+  
+  if(estadoPulsador == HIGH){
+    adquisicionActiva = true;
+    //tiempoInicio = millis();
+    
+    // Reiniciar parametros para una nueva adquisición
+    lcd.begin(16, 2);
+    lcd.setCursor(0, 0);
+	lcd.print("Tomando datos...");
+    lcd.setCursor(0, 1);
+	lcd.print("                ");
+    
+    sumaTotal = 0;
+    cantidadDatos = 0;
+    inicio = 0;
+    fin = 0;
+    percentilSup = 0;
+    
+    //delete[] datosSenal;
+  }
+
+  if(estadoPulsador2 == HIGH){
+    adquisicionActiva = false;
+    offset = calcularPromedioTotal();
+    calcularExtremos(&max, &min);
+    percentilSup = percentilSuperior(&max, &min);
+       
+    //limpia pantalla
+    lcd.setCursor(0, 0);
+    lcd.print("                ");
+    
+    //muestra amplitud de la onda
+    lcd.setCursor(0, 0);
+    lcd.print(String(float(max-min)/200, 1) + String("V"));
+    
+    //muestra frecuencia de la onda
+    frecuencia = calcularFrecuencia();
+    lcd.setCursor(7, 0);
+    lcd.print(String(frecuencia, 1) + String("Hz"));
+        
+    //muestra codigo forma de la onda
+    defineForma(percentilSup);
+    
+    //muestra codigo 1 (pocos datos para analisis)
+    if(cantidadDatos < 200){
+      lcd.setCursor(15, 0);
+      lcd.print('1');
+    }
+    
+    //muestra voltaje maximo    
+    lcd.setCursor(0, 1);
+    lcd.print(float(max)*factorConversion, 1);
+    
+    //muestra voltaje mínimo
+    lcd.setCursor(5, 1);
+    lcd.print(float(min)*factorConversion, 1);
+    
+    //muestra offset
+    lcd.setCursor(11, 1);
+    lcd.print(String(offset*factorConversion, 1) + String("V"));
+    
+  }
+  
+  if(adquisicionActiva){
+    agregarDatos(val); 
+  }
+  delay(valorDelay);
+}
